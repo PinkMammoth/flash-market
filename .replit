@@ -1,7 +1,30 @@
-modules = ["rust-stable"]
+modules = ["rust-stable", "nodejs-20"]
 [agent]
 expertMode = true
 
 [nix]
 channel = "stable-25_05"
 packages = ["solana-cli"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Solana Development"
+
+[[workflows.workflow]]
+name = "Solana Development"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd hello-solana && bash build.sh && echo \"✅ Solana development environment ready!\" && echo \"📁 Project directory: $(pwd)\" && echo \"📋 Available commands:\" && echo \"  • anchor build    - Build the program\" && echo \"  • anchor test     - Run tests\" && echo \"  • anchor deploy   - Deploy to devnet\" && echo \"  • solana logs     - View program logs\" && echo \"\" && echo \"🔄 Watching for changes...\" && while true; do sleep 30; echo \"$(date): Solana dev environment running...\"; done"
+
+[workflows.workflow.metadata]
+outputType = "console"
