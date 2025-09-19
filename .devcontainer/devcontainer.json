@@ -1,17 +1,12 @@
 {
-    "name": "Anchor Development Environment",
-    "image": "mcr.microsoft.com/devcontainers/rust:1-1-bullseye",
-    "features": {
-        "ghcr.io/devcontainers-contrib/features/solana:1": {},
-        "ghcr.io/project-serum/anchor-dev-container-feature:1.0.9": {}
-    },
-    "postCreateCommand": "npm install",
-    "customizations": {
-        "vscode": {
-            "extensions": [
-                "rust-lang.rust-analyzer",
-                "serayuzgur.crates"
-            ]
-        }
+  "name": "Anchor Dev Environment",
+  "image": "mcr.microsoft.com/vscode/devcontainers/base:bullseye",
+  "postCreateCommand": ".devcontainer/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer"
+      ]
     }
+  }
 }
