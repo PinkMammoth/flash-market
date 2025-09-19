@@ -1,12 +1,16 @@
 {
-  "name": "Anchor Dev Environment",
-  "image": "mcr.microsoft.com/vscode/devcontainers/base:bullseye",
-  "postCreateCommand": ".devcontainer/post-create.sh",
+  "name": "Anchor Pre-Built Environment",
+  "image": "anchorlang/anchor:latest",
+
+  "postCreateCommand": "npm install",
+
   "customizations": {
     "vscode": {
       "extensions": [
         "rust-lang.rust-analyzer"
       ]
     }
-  }
+  },
+
+  "remoteUser": "root"
 }
