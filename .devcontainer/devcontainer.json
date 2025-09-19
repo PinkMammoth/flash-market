@@ -1,16 +1,4 @@
 {
-  "name": "Anchor Pre-Built Environment",
-  "image": "anchorlang/anchor:latest",
-
-  "postCreateCommand": "npm install",
-
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "rust-lang.rust-analyzer"
-      ]
-    }
-  },
-
-  "remoteUser": "root"
+  "name": "Blank Debian Environment",
+  "image": "mcr.microsoft.com/vscode/devcontainers/base:bullseye"
 }
