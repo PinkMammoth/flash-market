@@ -1,0 +1,6 @@
+{
+  "git": {
+    "sha1": "4695fb02fc3902345ffbfb54fd5df6adcc3bbd4d"
+  },
+  "path_in_vcs": "crates/toml_datetime"
+}

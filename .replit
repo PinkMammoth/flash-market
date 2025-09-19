@@ -4,7 +4,7 @@ expertMode = true
 
 [nix]
 channel = "stable-25_05"
-packages = ["solana-cli"]
+packages = ["solana-cli", "anchor"]
 
 [workflows]
 runButton = "Project"
