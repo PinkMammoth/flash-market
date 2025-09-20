@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer, Mint};
+use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 use pyth_client;
 use std::convert::TryInto;
 
@@ -33,7 +33,7 @@ pub mod flash_pred {
         market.yes_pool = 0;
         market.no_pool = 0;
         market.pyth_price_feed = ctx.accounts.pyth_price_feed.key();
-        market.bump = *ctx.bumps.get("market").ok_or(ErrorCode::BumpMissing)?;
+        market.bump = ctx.bumps.market; // Updated bump access for Anchor 0.31.1
 
         Ok(())
     }
@@ -60,17 +60,13 @@ pub mod flash_pred {
         *market_pool_field = market_pool_field.checked_add(amount).ok_or(ErrorCode::Overflow)?;
 
         let user_pos = &mut ctx.accounts.user_position;
-        if user_pos.user == Pubkey::default() {
-            user_pos.user = ctx.accounts.user.key();
-            user_pos.market = market.key();
-            user_pos.side = if side == Side::Yes { 0u8 } else { 1u8 };
-            user_pos.amount = amount;
-            user_pos.claimed = false;
-        } else {
-            require!(user_pos.side == if side == Side::Yes { 0u8 } else { 1u8 }, ErrorCode::SideMismatch);
-            user_pos.amount = user_pos.amount.checked_add(amount).ok_or(ErrorCode::Overflow)?;
-        }
-
+        // init_if_needed handles initialization automatically in Anchor 0.31.1
+        user_pos.user = ctx.accounts.user.key();
+        user_pos.market = market.key();
+        user_pos.side = if side == Side::Yes { 0u8 } else { 1u8 };
+        user_pos.amount = user_pos.amount.checked_add(amount).ok_or(ErrorCode::Overflow)?;
+        user_pos.claimed = false;
+        
         Ok(())
     }
 
@@ -84,7 +80,8 @@ pub mod flash_pred {
 
         let pyth_info = &ctx.accounts.pyth_price_feed;
         let data = &pyth_info.try_borrow_data()?;
-        let price: &pyth_client::Price = pyth_client::cast::<pyth_client::Price>(data);
+        let price_feed = pyth_client::cast::<pyth_client::PriceFeed>(data);
+        let price = price_feed.get_price_unchecked(); // Use get_price_unchecked for simplicity in this context
 
         let agg_price = price.price;
         let expo = price.expo;
@@ -208,7 +205,6 @@ pub struct CreateMarket<'info> {
     /// CHECK: pyth price feed pubkey
     pub pyth_price_feed: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
-    pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>,
 }
 

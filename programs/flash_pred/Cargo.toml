@@ -14,8 +14,9 @@ no-idl = []
 no-log-ix-name = []
 cpi = ["no-entrypoint"]
 default = []
+init-if-needed = [] # This is the new required feature
 
 [dependencies]
-anchor-lang = "0.30.0"
-anchor-spl = "0.30.0"
+anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
+anchor-spl = "0.31.1"
 pyth-client = "0.2.2"
