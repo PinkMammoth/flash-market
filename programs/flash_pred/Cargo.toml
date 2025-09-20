@@ -20,3 +20,6 @@ init-if-needed = [] # This is the new required feature
 anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
 anchor-spl = "0.31.1"
 pyth-client = "0.2.2"
+
+[profile.release]
+overflow-checks = true
