@@ -10,3 +10,6 @@ wallet = "~/.config/solana/id.json"
 
 [scripts]
 test = "anchor test"
+
+[profile.release]
+overflow-checks = true
