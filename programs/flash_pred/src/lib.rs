@@ -1,15 +1,27 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug)]
 pub struct Price {
     pub price: i64,
     pub conf: u64,
     pub expo: i32,
 }
 
+impl Default for Price {
+    fn default() -> Self {
+        Price {
+            price: 0,
+            conf: 0,
+            expo: 0,
+        }
+    }
+}
+
+
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug)]
 pub struct PriceFeed {
     pub magic: u32,
     pub ver: u32,
@@ -36,6 +48,37 @@ pub struct PriceFeed {
     pub price_component: [u8; 240], // skip unused fields
     pub agg: Price,
     // ... rest omitted for brevity
+}
+
+impl Default for PriceFeed {
+    fn default() -> Self {
+        PriceFeed {
+            magic: 0,
+            ver: 0,
+            atype: 0,
+            size: 0,
+            ptype: 0,
+            expo: 0,
+            num: 0,
+            unused: 0,
+            curr_slot: 0,
+            valid_slot: 0,
+            twap: 0,
+            twac: 0,
+            drv1: 0,
+            drv2: 0,
+            drv3: 0,
+            drv4: 0,
+            product_account_key: [0u8; 32],
+            next_price_account_key: [0u8; 32],
+            previous_slot: 0,
+            previous_price: 0,
+            previous_conf: 0,
+            drv5: 0,
+            price_component: [0u8; 240],
+            agg: Price::default(),
+        }
+    }
 }
 
 fn load_price_feed(data: &[u8]) -> &PriceFeed {
