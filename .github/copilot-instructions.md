@@ -1,11 +1,13 @@
 # Copilot Instructions for flash-market
 
 ## Project Overview
+
 - **flash-market** is a Rust-based Solana program (on-chain smart contract) with supporting TypeScript scripts and tests.
 - The main on-chain logic is in `programs/flash_pred/` (see `src/lib.rs`).
 - Off-chain scripts (keepers, tests) are in `scripts/` and `tests/`.
 
 ## Architecture & Data Flow
+
 - **On-chain:**
   - Rust Solana program in `programs/flash_pred/`.
   - Entry point: `src/lib.rs` defines program logic, instruction handlers, and state.
@@ -14,6 +16,7 @@
   - Tests in `tests/` (e.g., `flash_pred.ts`) use Anchor/TypeScript to test on-chain logic.
 
 ## Build & Test Workflows
+
 - **Build Solana program:**
   - From repo root: `anchor build` or `cargo build-bpf --manifest-path programs/flash_pred/Cargo.toml`
 - **Run tests:**
@@ -23,6 +26,7 @@
   - Use `anchor deploy` for deploying to localnet/devnet.
 
 ## Conventions & Patterns
+
 - **Rust:**
   - Use Anchor framework macros (`#[program]`, `#[derive(Accounts)]`, etc.)
   - State and instruction handlers are grouped in `lib.rs`.
@@ -33,6 +37,7 @@
   - Use `migrations/` for Anchor migration scripts if needed.
 
 ## Integration Points
+
 - **Solana/Anchor:**
   - Relies on Anchor CLI and Solana toolchain.
   - `Anchor.toml` configures cluster, program, and test settings.
@@ -40,6 +45,7 @@
   - May depend on Solana devnet/mainnet and external oracles (see scripts).
 
 ## Key Files & Directories
+
 - `programs/flash_pred/src/lib.rs`: Main on-chain logic
 - `scripts/keeper.ts`: Off-chain keeper script
 - `tests/flash_pred.ts`: Main test suite
@@ -47,6 +53,7 @@
 - `Cargo.toml`: Rust dependencies
 
 ## Example Patterns
+
 - **Instruction handler:**
   ```rust
   #[program]
@@ -59,6 +66,7 @@
   ```
 
 ## Tips for AI Agents
+
 - Always check `Anchor.toml` and `Cargo.toml` for config and dependencies.
 - When adding new instructions, update both Rust and TypeScript IDL usage.
 - Use Anchor macros and patterns for new state/instruction definitions.

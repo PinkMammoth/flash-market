@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
-use pyth_client;
+use pyth_sdk_solana::{load_price_feed_from_account_info, PriceFeed};
 use std::convert::TryInto;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg3q2aW7v4Yk");
@@ -78,14 +78,12 @@ pub mod flash_pred {
         require!(ctx.accounts.keeper.key() == market.keeper, ErrorCode::InvalidKeeper);
         require!(market.outcome == Outcome::Pending, ErrorCode::MarketAlreadyResolved);
 
-        let pyth_info = &ctx.accounts.pyth_price_feed;
-        let data = &pyth_info.try_borrow_data()?;
-        let price_feed = pyth_client::cast::<pyth_client::PriceFeed>(data);
-        let price = price_feed.get_price_unchecked(); // Use get_price_unchecked for simplicity in this context
+    let price_feed = load_price_feed_from_account_info(&ctx.accounts.pyth_price_feed)?;
+    let price = price_feed.get_current_price().ok_or(ErrorCode::InvalidOraclePrice)?;
 
-        let agg_price = price.price;
-        let expo = price.expo;
-        let conf = price.conf;
+    let agg_price = price.price;
+    let expo = price.expo;
+    let conf = price.conf;
 
         if agg_price == 0 { return err!(ErrorCode::InvalidOraclePrice); }
         let abs_price = if agg_price < 0 { -agg_price } else { agg_price };
@@ -115,7 +113,7 @@ pub mod flash_pred {
     }
 
     pub fn claim_winnings(ctx: Context<ClaimWinnings>) -> Result<()> {
-        let market = &mut ctx.accounts.market;
+    let market = &mut ctx.accounts.market;
         require!(market.outcome == Outcome::Yes || market.outcome == Outcome::No, ErrorCode::MarketNotResolved);
 
         let user_pos = &mut ctx.accounts.user_position;
@@ -152,7 +150,7 @@ pub mod flash_pred {
         let cpi_accounts = Transfer {
             from: vault_account.clone(),
             to: ctx.accounts.user_token_account.to_account_info(),
-            authority: ctx.accounts.market.to_account_info(),
+            authority: market.to_account_info(),
         };
         let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi_accounts, signer);
         token::transfer(cpi_ctx, payout)?;
@@ -182,7 +180,7 @@ pub mod flash_pred {
         let cpi_accounts = Transfer {
             from: from_vault,
             to: ctx.accounts.user_token_account.to_account_info(),
-            authority: ctx.accounts.market.to_account_info(),
+            authority: market.to_account_info(),
         };
         let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi_accounts, signer);
         token::transfer(cpi_ctx, amount)?;
