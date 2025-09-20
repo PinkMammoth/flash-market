@@ -19,7 +19,6 @@ init-if-needed = [] # This is the new required feature
 [dependencies]
 anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
 anchor-spl = "0.31.1"
-pyth-sdk-solana = "0.7"
 
 [profile.release]
 overflow-checks = true

@@ -1,6 +1,46 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
-use pyth_sdk_solana::{load_price_feed_from_account_info, PriceFeed};
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default)]
+pub struct Price {
+    pub price: i64,
+    pub conf: u64,
+    pub expo: i32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default)]
+pub struct PriceFeed {
+    pub magic: u32,
+    pub ver: u32,
+    pub atype: u32,
+    pub size: u32,
+    pub ptype: u32,
+    pub expo: i32,
+    pub num: u32,
+    pub unused: u32,
+    pub curr_slot: u64,
+    pub valid_slot: u64,
+    pub twap: i64,
+    pub twac: u64,
+    pub drv1: i64,
+    pub drv2: i64,
+    pub drv3: i64,
+    pub drv4: i64,
+    pub product_account_key: [u8; 32],
+    pub next_price_account_key: [u8; 32],
+    pub previous_slot: u64,
+    pub previous_price: i64,
+    pub previous_conf: u64,
+    pub drv5: i64,
+    pub price_component: [u8; 240], // skip unused fields
+    pub agg: Price,
+    // ... rest omitted for brevity
+}
+
+fn load_price_feed(data: &[u8]) -> &PriceFeed {
+    unsafe { &*(data.as_ptr() as *const PriceFeed) }
+}
 use std::convert::TryInto;
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg3q2aW7v4Yk");
@@ -78,12 +118,12 @@ pub mod flash_pred {
         require!(ctx.accounts.keeper.key() == market.keeper, ErrorCode::InvalidKeeper);
         require!(market.outcome == Outcome::Pending, ErrorCode::MarketAlreadyResolved);
 
-    let price_feed = load_price_feed_from_account_info(&ctx.accounts.pyth_price_feed)?;
-    let price = price_feed.get_current_price().ok_or(ErrorCode::InvalidOraclePrice)?;
-
-    let agg_price = price.price;
-    let expo = price.expo;
-    let conf = price.conf;
+        let pyth_info = &ctx.accounts.pyth_price_feed;
+        let data = &pyth_info.try_borrow_data()?;
+        let price_feed = load_price_feed(data);
+        let agg_price = price_feed.agg.price;
+        let expo = price_feed.expo;
+        let conf = price_feed.agg.conf;
 
         if agg_price == 0 { return err!(ErrorCode::InvalidOraclePrice); }
         let abs_price = if agg_price < 0 { -agg_price } else { agg_price };
