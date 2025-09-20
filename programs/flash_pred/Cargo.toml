@@ -1,3 +1,5 @@
+[features]
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 [package]
 name = "flash_pred"
 version = "0.1.0"
