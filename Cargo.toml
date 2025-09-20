@@ -6,6 +6,3 @@ resolver = "2"
 
 [workspace.profile.release]
 overflow-checks = true
-
-[profile.release]
-overflow-checks = true
