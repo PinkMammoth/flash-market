@@ -13,3 +13,6 @@ test = "anchor test"
 
 [profile.release]
 overflow-checks = true
+
+[test]
+validator_port = 8900
