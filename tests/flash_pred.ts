@@ -1,5 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, BN } from "@coral-xyz/anchor";
+import { FlashPred } from "../target/types/flash_pred";
 import {
   PublicKey,
   SystemProgram,
@@ -22,7 +23,7 @@ const MOCK_WRITER_PROGRAM_ID = new PublicKey("gockemGfVwL3sU3KFRf3a9nB5Dk2d3cK22
 describe("flash_pred integration tests", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
-  const program = anchor.workspace.FlashPred as Program;
+  const program = anchor.workspace.FlashPred as Program<FlashPred>;
 
   // #region Helpers
   const airdrop = async (pubkey: PublicKey, amount = 2e9) => {
@@ -146,7 +147,7 @@ describe("flash_pred integration tests", () => {
       // Create market
       await program.methods
         .createMarket("BTC-USD", new BN(strikePrice), new BN(durationSecs), new BN(cutoffSecs), new BN(graceSecs), new BN(maxDelaySecs))
-        .accounts({ market: marketPda, creator: creator.publicKey, keeper: keeper.publicKey, pythPriceFeed: mockedPythAccount.publicKey, systemProgram: SystemProgram.programId, tokenProgram: TOKEN_PROGRAM_ID, rent: SYSVAR_RENT_PUBKEY, })
+        .accounts({ market: marketPda, creator: creator.publicKey, keeper: keeper.publicKey, pythPriceFeed: mockedPythAccount.publicKey, systemProgram: SystemProgram.programId, rent: SYSVAR_RENT_PUBKEY, })
         .signers([creator])
         .rpc();
     });
