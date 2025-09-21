@@ -8,8 +8,5 @@ flash_pred = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg3q2aW7v4Yk"
 cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
-[profile.release]
-overflow-checks = true
-
 [test]
 validator_port = 8900
