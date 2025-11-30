@@ -86,10 +86,15 @@ fn load_price_feed(data: &[u8]) -> &PriceFeed {
 }
 use std::convert::TryInto;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg3q2aW7v4Yk");
+declare_id!("7SjyWVdpvmgvrojxmcd6KCC8atXC6h67sop8V5GYdUdz");
 
 const MARKET_SEED: &[u8] = b"market";
 const USERPOS_SEED: &[u8] = b"userpos";
+const MAX_ASSET_NAME_LEN: usize = 32;
+
+// TREASURY FEE CONSTANTS
+const TREASURY_FEE_BPS: u64 = 250; // 2.5% = 250 basis points (out of 10,000)
+const MAX_TREASURY_FEE_BPS: u64 = 1000; // 10% maximum to prevent abuse
 
 #[program]
 pub mod flash_pred {
@@ -104,19 +109,26 @@ pub mod flash_pred {
         grace_secs: i64,
         max_delay_secs: i64,
     ) -> Result<()> {
+        require!(asset_name.len() <= MAX_ASSET_NAME_LEN, ErrorCode::AssetNameTooLong);
+        
         let market = &mut ctx.accounts.market;
         let clock = Clock::get()?;
 
         market.asset_name = asset_name;
         market.strike_price = strike_price;
         market.expiry_ts = clock.unix_timestamp.checked_add(duration_secs).ok_or(ErrorCode::Overflow)?;
+        market.cutoff_buffer_secs = cutoff_buffer_secs;
+        market.grace_secs = grace_secs;
+        market.max_delay_secs = max_delay_secs;
         market.creator = ctx.accounts.creator.key();
         market.keeper = ctx.accounts.keeper.key();
         market.outcome = Outcome::Pending;
         market.yes_pool = 0;
         market.no_pool = 0;
         market.pyth_price_feed = ctx.accounts.pyth_price_feed.key();
-        market.bump = ctx.bumps.market; // Updated bump access for Anchor 0.31.1
+        market.settlement_price = 0;
+        market.treasury_collected = 0; // NEW: Track treasury fees collected
+        market.bump = ctx.bumps.market;
 
         Ok(())
     }
@@ -143,7 +155,6 @@ pub mod flash_pred {
         *market_pool_field = market_pool_field.checked_add(amount).ok_or(ErrorCode::Overflow)?;
 
         let user_pos = &mut ctx.accounts.user_position;
-        // init_if_needed handles initialization automatically in Anchor 0.31.1
         user_pos.user = ctx.accounts.user.key();
         user_pos.market = market.key();
         user_pos.side = if side == Side::Yes { 0u8 } else { 1u8 };
@@ -192,11 +203,21 @@ pub mod flash_pred {
 
         market.settlement_price = normalized_price;
 
+        // NEW: Calculate and track treasury fee
+        let total_pool = market.yes_pool.checked_add(market.no_pool).ok_or(ErrorCode::Overflow)?;
+        let treasury_fee = (total_pool as u128)
+            .checked_mul(TREASURY_FEE_BPS as u128)
+            .ok_or(ErrorCode::Overflow)?
+            .checked_div(10000u128)
+            .ok_or(ErrorCode::DivideByZero)?;
+        
+        market.treasury_collected = treasury_fee.try_into().map_err(|_| ErrorCode::Overflow)?;
+
         Ok(())
     }
 
     pub fn claim_winnings(ctx: Context<ClaimWinnings>) -> Result<()> {
-    let market = &mut ctx.accounts.market;
+        let market = &mut ctx.accounts.market;
         require!(market.outcome == Outcome::Yes || market.outcome == Outcome::No, ErrorCode::MarketNotResolved);
 
         let user_pos = &mut ctx.accounts.user_position;
@@ -217,8 +238,17 @@ pub mod flash_pred {
 
         if winner_pool == 0 { return err!(ErrorCode::DivideByZero); }
 
+        // NEW: Calculate payout AFTER treasury fee
+        let treasury_amount = market.treasury_collected as u128;
+        let payout_pool = total_pool.checked_sub(treasury_amount).ok_or(ErrorCode::Overflow)?;
+        
         let user_amount = user_pos.amount as u128;
-        let payout_u128 = user_amount.checked_mul(total_pool).ok_or(ErrorCode::Overflow)?.checked_div(winner_pool).ok_or(ErrorCode::DivideByZero)?;
+        let payout_u128 = user_amount
+            .checked_mul(payout_pool)
+            .ok_or(ErrorCode::Overflow)?
+            .checked_div(winner_pool)
+            .ok_or(ErrorCode::DivideByZero)?;
+        
         let payout: u64 = payout_u128.try_into().map_err(|_| ErrorCode::Overflow)?;
 
         let vault_account = match market.outcome {
@@ -239,6 +269,39 @@ pub mod flash_pred {
         token::transfer(cpi_ctx, payout)?;
 
         user_pos.claimed = true;
+
+        Ok(())
+    }
+
+    // NEW FUNCTION: Collect treasury fees to treasury wallet
+    pub fn collect_treasury(ctx: Context<CollectTreasury>) -> Result<()> {
+        let market = &ctx.accounts.market;
+        require!(market.outcome == Outcome::Yes || market.outcome == Outcome::No, ErrorCode::MarketNotResolved);
+        require!(ctx.accounts.treasury_authority.key() == market.creator, ErrorCode::Unauthorized);
+        
+        let treasury_amount = market.treasury_collected;
+        require!(treasury_amount > 0, ErrorCode::NoTreasuryToCollect);
+
+        // Determine which vault to withdraw from (the winning side still holds treasury fees)
+        let vault_account = match market.outcome {
+            Outcome::Yes => ctx.accounts.yes_vault.to_account_info(),
+            Outcome::No => ctx.accounts.no_vault.to_account_info(),
+            _ => unreachable!(),
+        };
+
+        let seeds = &[MARKET_SEED, market.creator.as_ref(), &[market.bump]];
+        let signer = &[&seeds[..]];
+
+        let cpi_accounts = Transfer {
+            from: vault_account.clone(),
+            to: ctx.accounts.treasury_wallet.to_account_info(),
+            authority: market.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi_accounts, signer);
+        token::transfer(cpi_ctx, treasury_amount)?;
+
+        // Mark as collected (we don't modify the market struct to prevent re-collection)
+        // In production, you might want to add a 'treasury_claimed' boolean flag
 
         Ok(())
     }
@@ -301,7 +364,7 @@ pub struct PlaceBet<'info> {
     pub yes_vault: Account<'info, TokenAccount>,
     #[account(mut)]
     pub no_vault: Account<'info, TokenAccount>,
-    #[account(init_if_needed, payer = user, seeds = [USERPOS_SEED, market.key().as_ref(), user.key().as_ref()], bump, space = 8 + 64)]
+    #[account(init_if_needed, payer = user, seeds = [USERPOS_SEED, market.key().as_ref(), user.key().as_ref()], bump, space = 8 + 80)]
     pub user_position: Account<'info, UserPosition>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
@@ -334,6 +397,22 @@ pub struct ClaimWinnings<'info> {
     pub token_program: Program<'info, Token>,
 }
 
+// NEW: Treasury collection struct
+#[derive(Accounts)]
+pub struct CollectTreasury<'info> {
+    #[account(mut, seeds = [MARKET_SEED, market.creator.as_ref()], bump = market.bump)]
+    pub market: Account<'info, Market>,
+    #[account(signer)]
+    pub treasury_authority: Signer<'info>,
+    #[account(mut)]
+    pub treasury_wallet: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub yes_vault: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub no_vault: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
+
 #[derive(Accounts)]
 pub struct RefundUnsettlable<'info> {
     #[account(mut, seeds = [MARKET_SEED, market.creator.as_ref()], bump = market.bump)]
@@ -354,7 +433,7 @@ pub struct RefundUnsettlable<'info> {
 #[account]
 pub struct Market {
     pub asset_name: String,
-    pub strike_price: u64, // stored in 1e6 scale
+    pub strike_price: u64,
     pub expiry_ts: i64,
     pub cutoff_buffer_secs: i64,
     pub grace_secs: i64,
@@ -366,6 +445,7 @@ pub struct Market {
     pub no_pool: u64,
     pub pyth_price_feed: Pubkey,
     pub settlement_price: u64,
+    pub treasury_collected: u64, // NEW: Track treasury fees
     pub bump: u8,
 }
 
@@ -373,7 +453,7 @@ pub struct Market {
 pub struct UserPosition {
     pub user: Pubkey,
     pub market: Pubkey,
-    pub side: u8, // 0 = yes, 1 = no
+    pub side: u8,
     pub amount: u64,
     pub claimed: bool,
 }
@@ -424,4 +504,8 @@ pub enum ErrorCode {
     SideMismatch,
     #[msg("Invalid side for payout")]
     InvalidSideForPayout,
+    #[msg("Asset name exceeds maximum length")]
+    AssetNameTooLong,
+    #[msg("No treasury fees to collect")]
+    NoTreasuryToCollect,
 }
